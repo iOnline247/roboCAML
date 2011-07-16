@@ -1,3 +1,21 @@
+/*
+ * roboCAML - Dynamically create CAML client side
+ * Version 0.1
+ * @requires jQuery
+ *
+ * Copyright (c) 2011 Matthew P. Bramer
+ * Examples and docs at:
+ * http://roboCAML.codeplex.com
+ * Licensed under the MIT license:
+ * http://www.opensource.org/licenses/mit-license.php
+ */
+/**
+ * @description Dynamically create CAML client side
+ * @type jQuery
+ * @name roboCAML
+ * @category Plugins/roboCAML
+ * @author Matthew P. Bramer/matthewpaulbramer@hotmail.com
+ */
 var roboCAML = (function($) {	
 	return {
 		ViewFields: function(arr) {
