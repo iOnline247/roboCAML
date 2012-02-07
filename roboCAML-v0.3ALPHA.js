@@ -342,10 +342,11 @@ var roboCAML = (function( $ ) {
 
 							//console.dir( currObj.valuePairs.length );
 
+							//Open <Method>
 							batch += "<Method ID='" + ( i + 1 ) + "' Cmd='" + crudOp + "'>";
 
 							if ( crudOp === "Delete" ) {
-								batch += "<Field Name='ID'>" + currObj.ID + "</Field></Method>";
+								batch += "<Field Name='ID'>" + currObj.ID + "</Field>";
 							} else {
 								for ( fieldNames=0, fieldNum = currObj.valuePairs.length; fieldNames < fieldNum; fieldNames = fieldNames + 2 ) {
 									//debugger;
@@ -353,9 +354,8 @@ var roboCAML = (function( $ ) {
 									//console.log(batch);
 								}
 							}
-
-
-
+	
+							//Close </Method>
 							batch += "</Method>";
 							//Get ID from opt.IDs
 							//batch += "<Field Name='ID'>" + currObj.ID + "</Field></Method>";
@@ -655,20 +655,20 @@ console.log(
 		updates: [
 			{
 				//Static Column Name, Value
-				valuePairs: ["Rank", "Numero Uno", "Description", "Some Notes", "Col3", "Update3", "ID", 1]
+				valuePairs: ["Title", "Numero Tres", "PercentComplete", 1, "Boolean", 0, "ID", 3]
 			},
 			{
 				//Defaults to Update anyway.  No need to pass it.
 				batchCMD: "Update",
-				valuePairs: ["ID", 2, "Col1", 1, "Col2", 2]
+				valuePairs: ["ID", 4, "Title", "Item4", "Boolean", 0]
 			},
 			{
 				batchCMD: "New",
-				valuePairs: ["Col1", 1, "Col2", 2]
+				valuePairs: ["Title", "Something New", "PercentComplete", 1]
 			},
 			{
 				batchCMD: "Delete",
-				ID: 3
+				ID: 6
 			}
 		]
 	})
@@ -678,7 +678,9 @@ console.log(
 
 /*
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// ~This portion is deprecated and will be pulled from roboCAML at any given time.
+// ~This portion of roboCAML.BatchCMD is deprecated and will be pulled 
+// ~ from roboCAML at any given time.
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // ~IDs and valuePairs must be in the same order or you'll kill KITTENS!!!!
 // ~You can use this way as well, but I don't think it's as easy to follow and may
 // ~cause unintended consequences.  Use with caution!
