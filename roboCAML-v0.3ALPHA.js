@@ -604,6 +604,8 @@ var roboCAML = (function( $ ) {
 								break;
 								
 							}
+							
+							break;
 						case "ViewAttributes":
 						//case "Recursive":
 							//http://msdn.microsoft.com/en-us/library/ie/dd585773(v=office.11).aspx
