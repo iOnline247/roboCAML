@@ -15,6 +15,10 @@
  * @name roboCAML
  * @category Module/roboCAML
  * @author Matthew P. Bramer/matthewpaulbramer@hotmail.com
+ *
+ *	Break/fix
+ *	~QueryOptions: adds the nodes in the correct place within the CAML; Also adds <QueryOptions> if roboCAML detects SPServices usage.
+ *	~QueryOptions: added more options to this method per the docs: http://msdn.microsoft.com/en-us/library/dd586530(v=office.11).aspx
  */
 var roboCAML = (function( $ ) {
 
@@ -226,17 +230,44 @@ var roboCAML = (function( $ ) {
 					case "dateoverlap":
 						return "DateRangesOverlap";
 
-		/* ~~~~~~~ Misc portion ~~~~~~~~ */
-					case "true":
-						return "True";
-					case "false":
-						return "False";
+		/* ~~~~~~~ QueryOptions portion ~~~~~~~~ */
+					case "dateinutc":
+						return "DateInUtc";
+
+					case "folder":
+						return "Folder";
+
+					case "paging":
+						return "Paging";
+
+					case "listitemcollectionpositionnext":
+						return "ListItemCollectionPositionNext";
+
+					case "includemandatorycolumns":
+						return "IncludeMandatoryColumns";
+
+					case "meetinginstanceid":
+					case "meetingid":
+						return "MeetingInstanceID";
+
+					case "viewattributes":
+					case "recursive":
+						return "ViewAttributes";
+						
+
+		/* ~~~~~~~ BatchCMD portion ~~~~~~~~ */
 					case "update":
 						return "Update";
 					case "delete":
 						return "Delete";
 					case "new":
 						return "New";
+
+		/* ~~~~~~~ Misc portion ~~~~~~~~ */
+					case "true":
+						return "True";
+					case "false":
+						return "False";
 				}
 			}
 		},	//End of NormalizeOp
@@ -354,7 +385,7 @@ var roboCAML = (function( $ ) {
 									//console.log(batch);
 								}
 							}
-	
+
 							//Close </Method>
 							batch += "</Method>";
 							//Get ID from opt.IDs
@@ -370,7 +401,7 @@ var roboCAML = (function( $ ) {
 				//Store listProperties in local var and cache listProperties globally.
 				columnTypes = listProperties[ opt.listName ] = GetList(opt),
 				//Default camlBehavior to ClientOM
-				camlBehavior = opt.closeCaml || "ClientOM",
+				camlBehavior = opt.closeCaml.toLowerCase() || "clientom",
 				//if array.length coerces to false, default to 1
 				numOfQueries = opt.config.length || 1,
 				filter,
@@ -475,7 +506,10 @@ var roboCAML = (function( $ ) {
 			}
 
 			if ( opt.hasOwnProperty("closeCaml") ) {
-				if ( camlBehavior.toLowerCase() === "clientom" ) {
+				if ( camlBehavior === "clientom" ) {
+				//	var arrTemp = [];
+					//Stuff array full of strings, starting with camlQuery.  This is for the <OrderBy> node.  Needs to be within the <Query> tags.
+					//arrTemp.push( CAML_TAG_QUERY_OPEN, CAML_TAG_WHERE_OPEN, camlQuery, CAML_TAG_WHERE_CLOSE, CAML_TAG_QUERY_CLOSE );
 					//Wrap camlQuery with the correct tags <Query><Where>.
 					camlQuery = CAML_TAG_QUERY_OPEN + CAML_TAG_WHERE_OPEN + camlQuery + CAML_TAG_WHERE_CLOSE + CAML_TAG_QUERY_CLOSE;
 					//Add options that may have been passed in.
@@ -508,48 +542,97 @@ var roboCAML = (function( $ ) {
 
 			return orderBy + "</OrderBy>";
 		},
-		QueryOptions: function( opt ) {
-			var queryOptions = "<QueryOptions>";
+		QueryOptions: function( opt, internalUse ) {
+			//More options need implementation: http://msdn.microsoft.com/en-us/library/dd586530(v=office.11).aspx
+
+			//Default assumes a CAML fragment is needed for SPServices.
+			//If building a fragment for use in Client OM, pass in camlType: "ClientOM"
+
+			/********************************************************
+			//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+			// ~Example usage
+			//	roboCAML.QueryOptions({
+			//		IncludeMandatoryColumns: true,
+			//		Folder: "/siteName/Lists/GrandChild/TestFolder/TestSubFolder"
+			//	});
+			//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+			*******************************************************/
+
+			var camlBehavior = opt.closeCaml || opt.camlType || "spservices",
+				spservices = camlBehavior.toLowerCase() === "spservices",
+				queryOptions = "";
+
+			if ( spservices ) {
+				queryOptions =  "<QueryOptions>";
+			}
+
+			if ( internalUse ) {
+				opt = opt.QueryOptions;
+			}
 
 			for ( var prop in opt ) {
 				if ( opt.hasOwnProperty( prop ) ) {
-
+					//Cache original value
+					var _prop = prop;
+					
+					prop = CorrectCAML( prop );
+					
 					switch ( prop ) {
 						case "IncludeMandatoryColumns":
 						case "DateInUtc":
-							queryOptions += wrapNode( prop, CorrectCAML( opt[ prop ] ) );
+							queryOptions += wrapNode( prop, CorrectCAML( opt[ _prop ] ) );
 							break;
 
+						case "MeetingInstanceID":
 						case "Paging":
-						case "Folder": //Should this value have a trailing "/" ?????
 						case "RowLimit":
-							queryOptions += wrapNode( prop, opt[ prop ] );
-							break;
-
+						case "Folder": //Should this value have a trailing "/" ????? <---- Doesn't matter. :~)
+							//Test needed for Paging... Could be an object passed in as well... Paging: { ListItemCollectionPositionNext: "somthing of value here"}
+							if ( toType( opt[ _prop ] ) === "number" || toType( opt[ _prop ] ) === "string" ) {
+								if ( spservices ) {
+									queryOptions += wrapNode( prop, opt[ _prop ] );
+								} else {
+									queryOptions = wrapNode( prop, opt[ _prop ] ) + queryOptions;
+								}
+								break;
+								
+							} else if ( toType( opt[ _prop ] === "object" ) ) {
+								//Figure out how to variablize ListItemCollectionPositionNext for compatibility with CorrectCAML
+								//var ListItemCollectionPositionNext = <----- Will not fix.  I'd have to add another loop and I'm not interested in that.
+								
+								queryOptions += "<" + prop + " ListItemCollectionPositionNext='" + opt[ _prop ].ListItemCollectionPositionNext + "' />";
+								break;
+								
+							}
 						case "ViewAttributes":
-						case "Recursive":
+						//case "Recursive":
 							//http://msdn.microsoft.com/en-us/library/ie/dd585773(v=office.11).aspx
 							queryOptions += "<ViewAttributes Scope='Recursive' />";
 							break;
 					}
+
 				}
 			}
 
-			return queryOptions + "</QueryOptions>";
+			if ( spservices ) {
+				return queryOptions + "</QueryOptions>";
+			}
+
+			return queryOptions;
 		},
 		//Adds OrderBy, ViewFields, QueryOptions to CAML String
-		AddCamlTags: function( opt, camlQuery ) {
+		AddCamlTags: function( opt, camlQuery, camlBehavior ) {
 
 			if ( opt.hasOwnProperty("ViewFields") ) {
 				camlQuery = this.ViewFields( opt.ViewFields ) + camlQuery;
 			}
 
-			if ( opt.hasOwnProperty("OrderBy") ) {
+			if ( opt.hasOwnProperty("OrderBy") && camlBehavior === "clientom" ) {
 				camlQuery += this.OrderBy( opt.OrderBy );
 			}
 
 			if ( opt.hasOwnProperty("QueryOptions") ) {
-				camlQuery += this.QueryOptions( opt.QueryOptions );
+				camlQuery += this.QueryOptions( opt, true );
 			}
 
 			return camlQuery;
@@ -678,7 +761,7 @@ console.log(
 
 /*
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// ~This portion of roboCAML.BatchCMD is deprecated and will be pulled 
+// ~This portion of roboCAML.BatchCMD is deprecated and will be pulled
 // ~ from roboCAML at any given time.
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // ~IDs and valuePairs must be in the same order or you'll kill KITTENS!!!!
