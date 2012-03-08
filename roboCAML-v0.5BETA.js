@@ -84,7 +84,7 @@ var roboCAML = (function( $ ) {
 				ajaxURL = "_vti_bin/Lists.asmx";
 
 			if ( opt.hasOwnProperty("webURL") ) {
-				if ( opt.webURL.charAt( opt.webURL.length - 1 ) === "/") {
+				if ( opt.webURL.charAt( opt.webURL.length - 1 ) === "/" ) {
 					ajaxURL = opt.webURL + ajaxURL;
 				} else if ( opt.webURL.length > 0 ) {
 					ajaxURL = opt.webURL + "/" + ajaxURL;
@@ -128,7 +128,7 @@ var roboCAML = (function( $ ) {
 			}
 
 			var msg = SOAPEnvelope.header +
-					"<WebUrlFromPageUrl xmlns='http://schemas.microsoft.com/sharepoint/soap/' ><pageUrl>" +
+					"<WebUrlFromPageUrl xmlns='http://schemas.microsoft.com/sharepoint/soap/'><pageUrl>" +
 					location.href.split("?")[0] + "</pageUrl></WebUrlFromPageUrl>" +
 					SOAPEnvelope.footer;
 
