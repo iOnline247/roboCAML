@@ -16,7 +16,7 @@
  *
  *	Break/fix
  *	~ Fixed Issue 756: http://robocaml.codeplex.com/workitem/756
- *	~ Postponed Issue 921: http://robocaml.codeplex.com/workitem/921 ~ stripped list caching from codebase for now...  Need more time to implement a long term solution.
+ *	~ Fixed Issue 921: http://robocaml.codeplex.com/workitem/921
  *	~ House cleaning on some duplicated/hardcoded text values. Converted them to variables.
  */
 var roboCAML = (function( $ ) {
@@ -40,6 +40,8 @@ var roboCAML = (function( $ ) {
 		CAML_TAG_WHERE_CLOSE = "</Where>",
 		//Used to cache the siteURL for the GetList Web Service call.
 		thisSite = "",
+		//Used to cached the webURL. Added to allow queries to lists of the same name on different sites.
+		webURL = "",
 		//Used to cache the list properties that have been queried.
 		listProperties = {},
 		//Used in QueryOptions to modify <View>
@@ -63,40 +65,24 @@ var roboCAML = (function( $ ) {
 		},
 		//Get List Properties
 		GetList = function( opt ) {
-		
-/*
-			//Researching the best way to cache the list schema...  
-			
-			
-			debugger;
+			//debugger;
 			//Return listProperties if already cached.
 			if ( listProperties[ opt.listName ] ) {
 				//console.log( "returning cached results");
 				//console.dir( listProperties[ opt.listName] );
 				return listProperties[ opt.listName ];
 			}
-*/
 
 			//Object to be returned w/ list information
 			var returnProps = {},
-				// Build the URL for the Ajax call based on which operation we're calling
-				// If the webURL has been provided, then use it, else use the current site
-				ajaxURL = "_vti_bin/Lists.asmx";
-
-			if ( opt.hasOwnProperty("webURL") ) {
-				if ( opt.webURL.charAt( opt.webURL.length - 1 ) === "/" ) {
-					ajaxURL = opt.webURL + ajaxURL;
-				} else if ( opt.webURL.length > 0 ) {
-					ajaxURL = opt.webURL + "/" + ajaxURL;
-				}
-			} else {
-				ajaxURL = GetWeb() + "/" + ajaxURL;
-			}
-
-			var soapEnv = SOAPEnvelope.header + "<GetList xmlns='http://schemas.microsoft.com/sharepoint/soap/'><listName>" + opt.listName + "</listName></GetList>" + SOAPEnvelope.footer;
+				soapEnv = SOAPEnvelope.header + 
+					"<GetList xmlns='http://schemas.microsoft.com/sharepoint/soap/'><listName>" + opt.listName + "</listName></GetList>" + 
+					SOAPEnvelope.footer
+			
+			; //local vars
 
 			$.ajax({
-				url: ajaxURL,
+				url: opt.webURL,
 				async: false,
 				type: "POST",
 				data: soapEnv,
@@ -111,10 +97,10 @@ var roboCAML = (function( $ ) {
 						//console.log( "Type: " + $(this).attr("Type") + " StaticName: " + $(this).attr("StaticName") );
 
 						if ( $node.attr("StaticName") ) {
-							returnProps[ $node.attr("StaticName") ] = $node.attr("Type");
+							returnProps[ opt.webURL + "___" + $node.attr("StaticName") ] = $node.attr("Type");
 						} else {
 							//Fixed edge case when StaticName is undefined
-							returnProps[ $node.attr("Name") ] = $node.attr("Type");
+							returnProps[ opt.webURL + "___" + $node.attr("Name") ] = $node.attr("Type");
 						}
 					});
 				}
@@ -402,11 +388,8 @@ var roboCAML = (function( $ ) {
 		},
 		Query: function( opt ) {
 			var prop,
-				//Store listProperties in local var and cache listProperties globally.
-				//columnTypes = listProperties[ opt.listName ] = GetList( opt ),
-				
 				//Delete after fixing list cache issue...
-				columnTypes = GetList( opt ),
+				//columnTypes = GetList( opt ),
 				//Default camlBehavior to ClientOM
 				camlBehavior = ( opt.closeCaml ) ? opt.closeCaml.toLowerCase() : "clientom",
 				//if array.length coerces to false, default to 1
@@ -418,12 +401,34 @@ var roboCAML = (function( $ ) {
 				i=0,
 				//Boolean for lookupId
 				lookupId = false,
-				//Boolean test for fragment being passed in.
-				camlFragment = false,
+				//Boolean tests for fragment being passed in.
+				camlFragmentString = false,
+				camlFragmentObj = false,
+				camlFragOpts,
 				normalizedNode = "",
 				//<OrderBy>
-				orderTag = ( opt.hasOwnProperty("OrderBy") ) ? this.OrderBy( opt.OrderBy ) : "";
+				orderTag = ( opt.hasOwnProperty("OrderBy") ) ? this.OrderBy( opt.OrderBy ) : "",
+				ajaxURL = "_vti_bin/Lists.asmx"
 
+			; //local vars
+
+			
+			// Build the URL for the Ajax call based on which operation we're calling
+			// If the webURL has been provided, then use it, else use the current site			
+			if ( opt.hasOwnProperty("webURL") && !opt.hasOwnProperty("nestedQuery") ) {
+				if ( opt.webURL.charAt( opt.webURL.length - 1 ) === "/" ) {
+					opt.webURL += ajaxURL;
+				} else if ( opt.webURL.length > 0 ) {
+					opt.webURL += "/" + ajaxURL;
+				}
+			} else {
+				opt.webURL = GetWeb() + "/" + ajaxURL;
+			}
+			
+			//Store listProperties in local var and cache listProperties globally.
+			var columnTypes = listProperties[ opt.listName ] = GetList( opt );
+			
+			//console.log( opt.webURL );
 			//console.log(numOfQueries);
 			//debugger;
 
@@ -441,7 +446,7 @@ var roboCAML = (function( $ ) {
 							//console.log("IsNull");
 						} else {
 							//columnTypes contains the field types
-							camlQuery = wrapNode( normalizedNode, wrapFieldRef( opt.config[ prop ].staticName, lookupId ) + wrapValueType( columnTypes[ opt.config[ prop ].staticName ], opt.config[ prop ].value ) );
+							camlQuery = wrapNode( normalizedNode, wrapFieldRef( opt.config[ prop ].staticName, lookupId ) + wrapValueType( columnTypes[ opt.webURL + "___" + opt.config[ prop ].staticName ], opt.config[ prop ].value ) );
 						}
 					}
 				}
@@ -452,9 +457,14 @@ var roboCAML = (function( $ ) {
 							//Boolean result
 							lookupId = opt.config[ prop ].lookupId === true;
 							//Sets camlFragment to true if a string of CAML has been passed in.
-							camlFragment = typeof opt.config[ prop ].camlFragment === "string";
-							//Get correct CAML Node.
-							normalizedNode = ( camlFragment ) ?
+							camlFragmentString = toType( opt.config[ prop ].camlFragment ) === "string";
+							//Used ternary here b/c toType returns an "object" even when parameter passed is undefined.
+							camlFragmentObj =  ( opt.config[ prop ].camlFragment ) ? 
+								toType( opt.config[ prop ].camlFragment ) === "object" :
+								false
+							;
+							//Checks if camlFragment property has been passed in else we'll call correctCAML and normalize the op.
+							normalizedNode = ( opt.config[ prop ].camlFragment ) ?
 								opt.config[ prop ].camlFragment :
 								correctCAML( opt.config[ prop ].op )
 							; //vars
@@ -465,23 +475,24 @@ var roboCAML = (function( $ ) {
 								filter = correctCAML( opt.config[ prop ].filter );
 							}
 							
-							
 							//Set up fieldRef based on parameters passed in
 							if ( normalizedNode === "IsNull" || normalizedNode === "IsNotNull" ) {
 								camlQuery += wrapNode( normalizedNode, wrapFieldRef( opt.config[ prop ].staticName ) );
-							} else if ( camlFragment ) {
+							} else if ( camlFragmentString ) {
 								camlQuery += normalizedNode;
+							} else if ( camlFragmentObj ) {
+								camlFragOpts = opt.config[ prop ].camlFragment;
+								
+								//Stuff options inside camlFragment obj.
+								camlFragOpts.webURL = opt.webURL;
+								camlFragOpts.listName = opt.listName;
+								//Used to prevent weird webURL's when nesting CAML frags.
+								camlFragOpts.nestedQuery = true;
+								
+								camlQuery += roboCAML.Query( camlFragOpts );
 							} else {
-								camlQuery += wrapNode( normalizedNode, wrapFieldRef( opt.config[ prop ].staticName, lookupId ) + wrapValueType( columnTypes[ opt.config[ prop ].staticName ], opt.config[ prop ].value ) );
+								camlQuery += wrapNode( normalizedNode, wrapFieldRef( opt.config[ prop ].staticName, lookupId ) + wrapValueType( columnTypes[ opt.webURL + "___" + opt.config[ prop ].staticName ], opt.config[ prop ].value ) );
 							}
-						
-/*						
-							if ( normalizedNode === "IsNull" || normalizedNode === "IsNotNull" ) {
-								camlQuery += wrapNode( normalizedNode, wrapFieldRef( opt.config[ prop ].staticName ) );
-							} else {
-								camlQuery += wrapNode( normalizedNode, wrapFieldRef( opt.config[ prop ].staticName, lookupId ) + wrapValueType( columnTypes[ opt.config[ prop ].staticName ], opt.config[ prop ].value ) );
-							}
-*/
 							
 							i++;
 						}
@@ -495,9 +506,13 @@ var roboCAML = (function( $ ) {
 						//Boolean result
 						lookupId = opt.config[ prop ].lookupId === true;
 						//Sets camlFragment to true if a string of CAML has been passed in.
-						camlFragment = typeof opt.config[ prop ].camlFragment === "string";
+						camlFragmentString = toType( opt.config[ prop ].camlFragment ) === "string";
+						camlFragmentObj =  ( opt.config[ prop ].camlFragment ) ? 
+							toType( opt.config[ prop ].camlFragment ) === "object" :
+							false
+						;
 						//Get correct CAML Node.
-						normalizedNode = ( camlFragment ) ?
+						normalizedNode = ( opt.config[ prop ].camlFragment ) ?
 							opt.config[ prop ].camlFragment :
 							correctCAML( opt.config[ prop ].op )
 						; //vars
@@ -511,10 +526,20 @@ var roboCAML = (function( $ ) {
 						//Set up fieldRef based on parameters passed in
 						if ( normalizedNode === "IsNull" || normalizedNode === "IsNotNull" ) {
 							fieldRef = wrapNode( normalizedNode, wrapFieldRef( opt.config[ prop ].staticName ) );
-						} else if ( camlFragment ) {
+						} else if ( camlFragmentString ) {
 							fieldRef = normalizedNode;
+						} else if ( camlFragmentObj ) {
+							camlFragOpts = opt.config[ prop ].camlFragment;
+							
+							//Stuff options inside camlFragment obj.
+							camlFragOpts.webURL = opt.webURL;
+							camlFragOpts.listName = opt.listName;
+							//Used to prevent weird webURL's when nesting CAML frags.
+							camlFragOpts.nestedQuery = true;
+								
+							camlQuery += roboCAML.Query( camlFragOpts );
 						} else {
-							fieldRef = wrapNode( normalizedNode, wrapFieldRef( opt.config[ prop ].staticName, lookupId ) + wrapValueType( columnTypes[ opt.config[ prop ].staticName ], opt.config[ prop ].value ) );
+							fieldRef = wrapNode( normalizedNode, wrapFieldRef( opt.config[ prop ].staticName, lookupId ) + wrapValueType( columnTypes[ opt.webURL + "___" + opt.config[ prop ].staticName ], opt.config[ prop ].value ) );
 						}
 
 						//Determine where to place the filter within the camlQuery
